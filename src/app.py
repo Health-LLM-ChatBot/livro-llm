@@ -20,16 +20,20 @@ if "chat_history" not in st.session_state:
 st.set_page_config(page_title="101 LLM - Livro")
 st.title("LLM - Livro")
 
-model_choice = st.selectbox("Escolha o modelo", ["Modelo com contexto - llama3", "Modelo sem contexto - llama3", "Modelo sem contexto - gemma7b"])
+model_choice = st.selectbox("Escolha o modelo", [
+        "Modelo I - LLama3",
+        "Modelo II - LLama3 (RAG)",
+        "Modelo III - LLama3-custom"
+    ])
 
 def get_llm(model_choice):
-    if model_choice == "Modelo com contexto - llama3" or model_choice == "Modelo sem contexto - llama3":
+    if model_choice == "Modelo II - LLama3 (RAG)" or model_choice == "Modelo I - LLama3":
         return ChatOllama(model="llama3")
     else:
         return ChatOllama(model="llama3-fine-tuned") # TODO: Mover para o modelo fine-tuned
 
 def get_response(context, query, chat_history, model_choice):
-    if "com contexto" in model_choice:
+    if "RAG" in model_choice:
         template = """
         Você é um modelo de inteligencia artificial e só deve responder em português sobre o contexto definido abaixo
 
@@ -43,6 +47,8 @@ def get_response(context, query, chat_history, model_choice):
         template = """
         Você é um modelo de inteligencia artificial e só deve responder em português.
 
+        Historico de conversa: {chat_history}
+
         Pergunta do usuário: {query}
         """
         
@@ -51,15 +57,14 @@ def get_response(context, query, chat_history, model_choice):
     chain = prompt | llm | StrOutputParser()
 
     return chain.stream({
-        "context": context if "com contexto" in model_choice else "",
-        "chat_history": chat_history if "com contexto" in model_choice else "",
+        "context": context if "RAG" in model_choice else "",
+        "chat_history": chat_history,
         "query": query
     })
 
 uploaded_file = None
-if "com contexto" in model_choice:
+if "RAG" in model_choice:
     uploaded_file = st.file_uploader("Escolha um arquivo em PDF")
-
 if uploaded_file is not None:
     with open('files/' + uploaded_file.name, mode='wb') as w:
         w.write(uploaded_file.getvalue())
@@ -93,10 +98,6 @@ if uploaded_file is not None:
 
         context = [doc.page_content for doc in faiss_index.similarity_search(user_query, k=3)]
         ai_response = st.write_stream(get_response(context, user_query, st.session_state.chat_history, model_choice))
-
-        with st.chat_message("IA"):
-            st.markdown(ai_response)
-
         st.session_state.chat_history.append(SystemMessage(ai_response))
 else:
     # Recuperar mensagens
@@ -106,7 +107,7 @@ else:
                 st.markdown(message.content)
         else:
             with st.chat_message("IA"):
-                st.markdown(message.content)
+                st.write(message.content)
 
     # Enviar mensagens e salvar historico
     user_query = st.chat_input('Digite aqui sua pergunta.')
@@ -116,9 +117,5 @@ else:
         with st.chat_message("Human"): 
             st.markdown(user_query)
 
-        ai_response = st.write_stream(get_response("", user_query, "", model_choice))
-
-        with st.chat_message("IA"):
-            st.markdown(ai_response)
-
+        ai_response = st.write_stream(get_response("", user_query, st.session_state.chat_history, model_choice))
         st.session_state.chat_history.append(SystemMessage(ai_response))
